@@ -17,6 +17,8 @@ export default function Home() {
   const [valor, setValor] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [categoria, setCategoria] = useState("");
+  const [produtoSaida, setProdutoSaida] = useState("");
+  const [quantidadeSaida, setQuantidadeSaida] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -72,9 +74,7 @@ export default function Home() {
     try {
       const resposta = await fetch("/api/produtos", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nome: nome.trim(),
           valor: valorNumerico,
@@ -90,7 +90,6 @@ export default function Home() {
       }
 
       setMensagem("Produto cadastrado com sucesso!");
-
       setNome("");
       setValor("");
       setQuantidade("");
@@ -105,6 +104,97 @@ export default function Home() {
       );
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function registrarSaida(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMensagem("");
+
+    const id = Number(produtoSaida);
+    const quantidadeNumerica = Number(quantidadeSaida);
+    const produto = produtos.find((item) => item.id === id);
+
+    if (
+      !produto ||
+      !Number.isInteger(quantidadeNumerica) ||
+      quantidadeNumerica <= 0
+    ) {
+      setMensagem("Selecione um produto e informe uma quantidade válida.");
+      return;
+    }
+
+    if (quantidadeNumerica > produto.quantidade) {
+      setMensagem(
+        `Estoque insuficiente. Disponível: ${produto.quantidade} unidade(s).`
+      );
+      return;
+    }
+
+    setSalvando(true);
+
+    try {
+      const resposta = await fetch("/api/produtos", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          produto_id: id,
+          quantidade: quantidadeNumerica,
+        }),
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || "Não foi possível registrar a saída.");
+      }
+
+      setMensagem(
+        `Saída registrada! Estoque de ${dados.nome}: ${dados.quantidade} unidade(s).`
+      );
+      setProdutoSaida("");
+      setQuantidadeSaida("");
+
+      await carregarProdutos();
+    } catch (error) {
+      setMensagem(
+        error instanceof Error
+          ? error.message
+          : "Erro ao registrar a saída."
+      );
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function excluirProduto(produto: Produto) {
+    const confirmar = window.confirm(
+      `Deseja realmente excluir "${produto.nome}"? Essa ação não pode ser desfeita.`
+    );
+
+    if (!confirmar) return;
+
+    setMensagem("");
+
+    try {
+      const resposta = await fetch(`/api/produtos/${produto.id}`, {
+        method: "DELETE",
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || "Não foi possível excluir o produto.");
+      }
+
+      setMensagem(`Produto "${produto.nome}" excluído com sucesso!`);
+      await carregarProdutos();
+    } catch (error) {
+      setMensagem(
+        error instanceof Error
+          ? error.message
+          : "Erro ao excluir o produto."
+      );
     }
   }
 
@@ -125,9 +215,19 @@ export default function Home() {
             SAEP — Gestão de Produtos
           </h1>
           <p className="mt-2 text-slate-600">
-            Cadastre produtos e acompanhe as quantidades disponíveis.
+            Cadastre produtos, acompanhe o estoque e registre saídas.
           </p>
         </header>
+
+        {mensagem && (
+          <p
+            role="status"
+            aria-live="polite"
+            className="mb-6 rounded-lg bg-white p-4 shadow-sm"
+          >
+            {mensagem}
+          </p>
+        )}
 
         <section className="mb-8 rounded-xl bg-white p-6 shadow-sm">
           <h2 className="mb-5 text-xl font-bold">Cadastrar produto</h2>
@@ -137,10 +237,7 @@ export default function Home() {
             className="grid grid-cols-1 gap-4 sm:grid-cols-2"
           >
             <div>
-              <label
-                htmlFor="nome"
-                className="mb-1 block text-sm font-medium"
-              >
+              <label htmlFor="nome" className="mb-1 block text-sm font-medium">
                 Nome do produto
               </label>
               <input
@@ -150,7 +247,7 @@ export default function Home() {
                 placeholder="Ex.: Barbante"
                 maxLength={150}
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </div>
 
@@ -168,15 +265,12 @@ export default function Home() {
                 placeholder="Ex.: Artesanato"
                 maxLength={100}
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </div>
 
             <div>
-              <label
-                htmlFor="valor"
-                className="mb-1 block text-sm font-medium"
-              >
+              <label htmlFor="valor" className="mb-1 block text-sm font-medium">
                 Valor (R$)
               </label>
               <input
@@ -188,7 +282,7 @@ export default function Home() {
                 onChange={(event) => setValor(event.target.value)}
                 placeholder="15.50"
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </div>
 
@@ -197,7 +291,7 @@ export default function Home() {
                 htmlFor="quantidade"
                 className="mb-1 block text-sm font-medium"
               >
-                Quantidade em estoque
+                Quantidade inicial
               </label>
               <input
                 id="quantidade"
@@ -208,7 +302,7 @@ export default function Home() {
                 onChange={(event) => setQuantidade(event.target.value)}
                 placeholder="20"
                 required
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-600"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
             </div>
 
@@ -216,22 +310,74 @@ export default function Home() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-lg bg-blue-700 px-5 py-3 font-semibold text-white disabled:opacity-60"
               >
-                {salvando ? "Cadastrando..." : "Cadastrar produto"}
+                {salvando ? "Salvando..." : "Cadastrar produto"}
               </button>
             </div>
           </form>
+        </section>
 
-          {mensagem && (
-            <p
-              role="status"
-              aria-live="polite"
-              className="mt-4 rounded-lg bg-slate-100 p-3 text-sm"
-            >
-              {mensagem}
-            </p>
-          )}
+        <section className="mb-8 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="mb-5 text-xl font-bold">Registrar saída</h2>
+
+          <form
+            onSubmit={registrarSaida}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+          >
+            <div>
+              <label
+                htmlFor="produtoSaida"
+                className="mb-1 block text-sm font-medium"
+              >
+                Produto
+              </label>
+              <select
+                id="produtoSaida"
+                value={produtoSaida}
+                onChange={(event) => setProdutoSaida(event.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="">Selecione um produto</option>
+                {produtos.map((produto) => (
+                  <option key={produto.id} value={produto.id}>
+                    {produto.nome} — estoque: {produto.quantidade}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label
+                htmlFor="quantidadeSaida"
+                className="mb-1 block text-sm font-medium"
+              >
+                Quantidade a retirar
+              </label>
+              <input
+                id="quantidadeSaida"
+                type="number"
+                min="1"
+                step="1"
+                value={quantidadeSaida}
+                onChange={(event) => setQuantidadeSaida(event.target.value)}
+                required
+                placeholder="Ex.: 2"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <button
+                type="submit"
+                disabled={salvando}
+                className="rounded-lg bg-amber-600 px-5 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {salvando ? "Processando..." : "Registrar saída"}
+              </button>
+            </div>
+          </form>
         </section>
 
         <section className="rounded-xl bg-white p-6 shadow-sm">
@@ -240,7 +386,7 @@ export default function Home() {
             <button
               type="button"
               onClick={carregarProdutos}
-              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium hover:bg-slate-50"
+              className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium"
             >
               Atualizar lista
             </button>
@@ -249,12 +395,10 @@ export default function Home() {
           {carregando ? (
             <p className="py-6 text-slate-600">Carregando produtos...</p>
           ) : produtos.length === 0 ? (
-            <p className="py-6 text-slate-600">
-              Nenhum produto cadastrado.
-            </p>
+            <p className="py-6 text-slate-600">Nenhum produto cadastrado.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[600px] text-left text-sm">
+              <table className="w-full min-w-[700px] text-left text-sm">
                 <thead>
                   <tr className="border-b border-slate-200 text-slate-500">
                     <th className="px-3 py-3">ID</th>
@@ -262,6 +406,7 @@ export default function Home() {
                     <th className="px-3 py-3">Categoria</th>
                     <th className="px-3 py-3">Valor</th>
                     <th className="px-3 py-3">Quantidade</th>
+                    <th className="px-3 py-3">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -271,14 +416,21 @@ export default function Home() {
                       className="border-b border-slate-100 last:border-0"
                     >
                       <td className="px-3 py-4">{produto.id}</td>
-                      <td className="px-3 py-4 font-medium">
-                        {produto.nome}
-                      </td>
+                      <td className="px-3 py-4 font-medium">{produto.nome}</td>
                       <td className="px-3 py-4">{produto.categoria}</td>
                       <td className="px-3 py-4">
                         {formatarMoeda(produto.valor)}
                       </td>
                       <td className="px-3 py-4">{produto.quantidade}</td>
+                      <td className="px-3 py-4">
+                        <button
+                          type="button"
+                          onClick={() => excluirProduto(produto)}
+                          className="rounded-lg bg-red-600 px-3 py-2 font-medium text-white"
+                        >
+                          Excluir
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -290,3 +442,4 @@ export default function Home() {
     </main>
   );
 }
+
