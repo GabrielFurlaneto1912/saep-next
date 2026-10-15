@@ -4,11 +4,11 @@ import pool from "@/lib/db";
 
 export async function GET() {
   try {
-    const [rows] = await pool.query(
+    const result = await pool.query(
       "SELECT id, nome, valor, quantidade, categoria FROM produtos ORDER BY id"
     );
 
-    return NextResponse.json(rows);
+    return NextResponse.json(result.rows);
   } catch (error) {
     console.error("Erro ao buscar produtos:", error);
 
